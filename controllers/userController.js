@@ -1,243 +1,194 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-// const shortid = require('shortid');
-// const validator = require('validator');
-// const authModel = require('../models/authModel');
 const User = require('../models/userModel');
-// const token = require('../middleware/authUser');
-// const checkUtils = require('../utilities/checkUtils');
-// const passwordUtils = require('../utilities/generatePassword');
 const mailerUtil = require('../utilities/mailerUtil');
+require('dotenv').config('../.env');
+const checkAuth = require('../middleware/authUser');
+const passwordUtil = require('../utilities/generatePassword');
 
-exports.registerUser = (req, res, next) => {
+exports.registerUser = async (req, res, next) => {
+    if (req.body.username === undefined || req.body.password === undefined || req.body.email === undefined) {
+        res.status(403).json({
+            success: false,
+            error: 'One or more required fields missing.'
+        })
+    }
     User.find({ email: req.body.email })
         .exec()
         .then(user => {
             if (user.length >= 1) {
                 return res.status(409).json({
-                    message: 'Mail Exists'
+                    success: false,
+                    error: 'Account already exists for this email.'
                 });
             } else {
-                bcrypt.hash(req.body.password, 10, (err, hash) => {
-                    if (err) {
-                        return res.status(500).json({ error: err })
-                    } else {
-                        const newUser = new User({
-                            _id: new mongoose.Types.ObjectId(),
-                            username: req.body.username,
-                            password: hash,
-                            email: req.body.email
-                        });
-                        newUser
-                            .save()
-                            .then(result => {
-                                console.log(result);
-                                res.status(200).json({
-                                    message: "User Registered"
-                                    // user: result
-                                });
-                                mailerUtil.registerMail(req.body.email, req.body.username);
-                            })
-                            .catch(err => {
-                                console.log(err);
-                                res.status(500).json({
-                                    error: err
-                                });
-                            });
-                    }
+                hashedPassword = passwordUtil.hashPassword(req.body.password);
+                const newUser = new User({
+                    _id: new mongoose.Types.ObjectId(),
+                    username: req.body.username,
+                    password: hashedPassword,
+                    email: req.body.email
                 });
+                newUser
+                    .save()
+                    .then(result => {
+                        console.log("User Registered");
+                        res.status(200).json({
+                            success: true,
+                            message: result
+                        });
+                        mailerUtil.registerMail(req.body.email, req.body.username);
+                    })
+                    .catch(err => {
+                        console.log(err);
+                        res.status(500).json({
+                            success: false,
+                            error: err
+                        });
+                    });
             }
         });
-};
+}
 
 exports.loginUser = (req, res, next) => {
+    if (req.body.username === undefined || req.body.password === undefined) {
+        res.status(403).json({
+            success: false,
+            error: 'One or more required fields missing.'
+        })
+    }
     User.find({ username: req.body.username })
         .exec()
         .then(user => {
-            if (user.length < 1) {
-                return res.status(401).json({
-                    message: "Auth failed"
+            if (user === null) {
+                console.error('User not found.');
+                return res.status(404).json({
+                    success: false,
+                    error: 'User Not found'
                 });
             }
-            bcrypt.compare(req.body.password, user[0].password, (err, result) => {
+            passwordUtil.comparePassword(req.body.password, user.password, (err, result) => {
                 if (err) {
-                    return res.status(401).json({
-                        message: "Auth failed"
+                    console.error('Incorrect password.');
+                    return res.status(403).json({
+                        success: false,
+                        error: 'Incorrect Password.'
                     });
                 }
                 if (result) {
-                    const token = jwt.sign(
-                        {
-                            userId: user[0]._id
-                        },
-                        process.env.JWT_KEY,
-                        {
-                            expiresIn: "1h"
-                        }
-                    );
+                    const token = jwt.sign({ id: user._id }, process.env.JWT_ACCESS_KEY, { expiresIn: process.env.JWT_ACCESS_EXP });
+                    // const refreshToken = generateRefreshToken(user[0].username);
+                    console.log(`User with username ${req.body.username} login successful.`);
                     return res.status(200).json({
-                        message: "Auth successful",
-                        token: token
+                        success: true,
+                        message: "User Login Successful.",
+                        token: { token/*, refreshToken*/ }
                     });
                 }
+                console.log(`Auth Failed.`);
                 res.status(401).json({
-                    message: "Auth failed"
+                    success: false,
+                    message: 'Auth failed.'
                 });
             });
         })
         .catch(err => {
             console.log(err);
             res.status(500).json({
+                success: false,
                 error: err
             });
         });
 };
 
-// let registerUser = (req, res) => {
-//     // validate user input
-//     let validateUserInput = () => {
-//         return new Promise((resolve, reject) => {
-//             if (req.body.email) {
-//                 if (!validator.isEmail(req.body.email)) {
-//                     res.status(400).json({
-//                         success: false,
-//                         message: 'Invalid Email'
-//                     });
-//                     reject(res);
-//                 }
-//             } else if (checkUtils.isEmpty(req.body.username) || checkUtils.isEmpty(req.body.password) || checkUtils.isEmpty(req.body.email)) {
-//                 res.status(400).json({
-//                     success: false,
-//                     message: 'one or more required fields missing'
-//                 });
-//                 reject(res);
-//             } else resolve(req);
-//         });
-//     };
-//     // create user
-//     let createUser = () => {
-//         return new Promise((resolve, reject) => {
-//             userModel.findOne({ username: req.body.username })
-//                 .exec((err, user) => {
-//                     if (err) {
-//                         res.status(500).json({
-//                             success: false,
-//                             message: 'User creation failed.'
-//                         }); reject(res);
-//                     } else if (checkUtils.isEmpty(user)) {
-//                         console.log(req.body);
-//                         let newUser = new userModel({
-//                             userId: shortid.generate(),
-//                             username: req.body.username,
-//                             password: passwordUtils.hashPass(req.body.password),
-//                             email: req.body.email
-//                         });
-//                         newUser.save((err, newUser) => {
-//                             if (err) {
-//                                 console.log(err);
-//                                 res.status(500).json({
-//                                     success: false,
-//                                     message: 'new user creation failed'
-//                                 });
-//                                 reject(res);
-//                             } else {
-//                                 let newUserObj = newUser.toObject();
-//                                 resolve(newUserObj);
-//                             }
-//                         });
-//                     } else {
-//                         res.status(403).json({
-//                             success: false,
-//                             message: 'user already exists with this email.'
-//                         }); reject(res);
-//                     }
-//                 });
-//         });
-//     };
-//     let sendRegisterMail = () => {
-//         let email = req.body.email;
-//         let username = req.body.username;
-//         mailerUtil.registerMail(email, username);
-//     };
-//     validateUserInput(req, res)
-//     .then(createUser)
-//     .then((resolve) => {
-//         sendRegisterMail();
-//         delete resolve.password;
-//         res.status(200).json({
-//             success: true,
-//             message: 'User Registered'
-//         })
-//     })
-//     .catch((err) => {
-//         console.log(err);
-//         res.status(500).json({
-//             success: false, 
-//             message: err
-//         })
-//     })
-// };
+exports.getAllUsers = async (req, res, next) => {
+    await User.find({})
+        .exec()
+        .then(docs => {
+            if (!docs) {
+                console.error('No users found');
+                res.status(404).json({
+                    success: false,
+                    message: 'No users found.'
+                });
+            }
+            console.log(`Get all users successful.`);
+            res.status(200).json({
+                success: true,
+                message: docs
+            });
+        })
+        .catch(err => {
+            console.log(err);
+            res.status(500).json({
+                success: false,
+                message: err
+            });
+        });
+};
 
-// // let loginUser = (req, res) => {
+exports.updateUser = (req, res, next) => {
+    if (req.body.username === undefined || req.body.password === undefined || req.body.email === undefined) {
+        res.status(400).json({
+            success: false,
+            error: 'required fields missing'
+        }); next();
+    }
+    const un = req.params.username;
+    User.findOneAndUpdate({ username: un }, { $set: req.body })
+        .exec()
+        .then(result => {
+            // if(!result) {
+            //     res.status(404).json({
+            //         success: false,
+            //         error: `User not found`
+            //     });    
+            // }
+            console.log(`User with username ${un} update successful.`);
+            res.status(200).json({
+                success: true,
+                message: result
+            });
+        })
+        .catch(err => {
+            console.log(`Error in updating user`);
+            res.status(400).json({
+                success: false,
+                error: err
+            });
+        });
+};
 
-// // };
+exports.removeUser = async (req, res, next) => {
+        const un = req.params.username;
+        User.remove({ username: un })
+            .exec()
+            .then(result => {
+                console.log(`User with username ${un} deleted`);
+                res.status(200).json({
+                    success: true,
+                    result: result
+                });
+            })
+            .catch(err => {
+                console.log(err);
+                res.status(500).json({
+                    success: false,
+                    error: err
+                });
+            });
+};
 
-// // let getAllUsers = (req, res) => {
-// //     userModel.find()
-// //         .select(' -__v -_id -password')
-// //         .lean()
-// //         .exec((err, result) => {
-// //             if (err) {
-// //                 console.log(`Error in Getting All Users: ${err}`);
-// //                 res.status(500).json({
-// //                     success: false,
-// //                     message: err
-// //                 });
-// //             } else if (checkUtils.isEmpty(result)) {
-// //                 res.status(404).json({
-// //                     success: false,
-// //                     message: 'No User Found'
-// //                 });
-// //             } else {
-// //                 res.status(200).json({
-// //                     success: true,
-// //                     message: 'Get All user details successful.'
-// //                 });
-// //             }
-// //         });
-// // };
-
-// // let updateUser = (req, res) => {
-// //     let options = req.body;
-// //     userModel.updateOne({ 'userId': req.params.userId }, options).select('-__v -password -_id')
-// //         .exec((err, result) => {
-// //             if (err) {
-// //                 console.log(err);
-// //                 res.status(500).json({
-// //                     success: false,
-// //                     message: 'update user details failed'
-// //                 });
-// //             } else if (checkUtils.isEmpty(result)) {
-// //                 res.status(404).json({
-// //                     success: false,
-// //                     message: 'User not found'
-// //                 });
-// //             } else {
-// //                 res.status(200).json({
-// //                     success: true,
-// //                     message: 'edit user successful'
-// //                 });
-// //             }
-// //         });
-// // };
-
-// module.exports = {
-//     register: registerUser,
-//     login: loginUser
-//     // getall: getAllUsers,
-//     // update: updateUser,
-//     // remove: removeUser,
-//     // logout: logoutUser
-// };
-
+exports.logoutUser = (req, res, next) => {
+    let token = req.headers["x-access-token"];
+    console.log(token)
+    // const userId = req.userData.sub;
+    // redisClient.del(un.toString());
+    // redisClient.set()
+    token = undefined;
+    res.status(200).json({
+        success: true,
+        message: 'User Logout successful.'
+    });
+};

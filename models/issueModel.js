@@ -14,6 +14,14 @@ const issueSchema = new mongoose.Schema({
 		type: String,
 		default: 'open'
 	},
+	createdAt: {
+		type: Date,
+		default: Date.now
+	},
+	updatedAt: {
+		type: Date,
+		default: Date.now
+	},
 	createdBy: {
 		type: mongoose.Schema.Types.ObjectId,
 		ref: 'User'
@@ -22,7 +30,5 @@ const issueSchema = new mongoose.Schema({
 		type: mongoose.Schema.Types.ObjectId,
 		ref: 'User'
 	}
-}, {
-	timestamps: true
 });
 module.exports = mongoose.model('Issue', issueSchema);

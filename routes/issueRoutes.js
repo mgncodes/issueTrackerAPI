@@ -1,4 +1,3 @@
-// // const { Int32, ObjectId } = require('bson');
 const express = require('express');
 const router = express.Router();
 
@@ -9,24 +8,24 @@ const issueController = require('../controllers/issueController');
 const checkAuth = require('../middleware/authUser');
 
 // add new issue
-router.post('/add', issueController.addIssue);
+router.post('/add', checkAuth.verifyToken, issueController.addIssue);
 
 // update issue
-router.patch('/update/:id', issueController.updateIssue);
+router.patch('/update/:id', checkAuth.verifyToken, issueController.updateIssue);
 
 // get all issues
-router.get('/getall', issueController.getAllIssues);
+router.get('/getall', checkAuth.verifyToken, issueController.getAllIssues);
 
 // get issue by id
-router.get('/get/:id', issueController.getIssueById);
+router.get('/get/:id', checkAuth.verifyToken, issueController.getIssueById);
 
 // get issue by status
-router.get('/get/:status', issueController.getIssueByStatus);
+router.get('/get/:status', checkAuth.verifyToken, issueController.getIssueByStatus);
 
 // update issue
-router.patch('/update/:id', issueController.updateIssue);
+router.patch('/update/:id', checkAuth.verifyToken, issueController.updateIssue);
 
 // remove issue
-router.delete('/remove/:id', issueController.deleteIssue);
+router.delete('/remove/:id', checkAuth.verifyToken, issueController.deleteIssue);
 
 module.exports = router;
